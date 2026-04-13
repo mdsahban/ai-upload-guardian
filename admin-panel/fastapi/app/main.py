@@ -5,7 +5,6 @@ import csv
 import hashlib
 import hmac
 import json
-import logging
 import os
 import re
 from io import StringIO
@@ -246,6 +245,43 @@ def _verify_panel_password(plain: str, password_hash: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), password_hash.encode("utf-8"))
   except Exception:
     return False
+
+
+def _panel_admin_seed_specs() -> list[tuple[str, str, str]]:
+  """
+  Returns admin accounts to seed from env.
+  Supports:
+  - legacy single user: AIUG_PANEL_ADMIN_EMAIL / PASSWORD / NAME
+  - explicit multi-user: AIUG_PANEL_ADMIN_1_*, AIUG_PANEL_ADMIN_2_*
+  """
+  out: list[tuple[str, str, str]] = []
+
+  def add_from(prefix: str) -> None:
+    email = (os.getenv(f"{prefix}_EMAIL") or "").strip().lower()
+    password = os.getenv(f"{prefix}_PASSWORD") or ""
+    name = (os.getenv(f"{prefix}_NAME") or "Administrator").strip() or "Administrator"
+    if email and password:
+      out.append((email, password, name))
+
+  # Keep compatibility with prior deployments.
+  legacy_email = (os.getenv("AIUG_PANEL_ADMIN_EMAIL") or "").strip().lower()
+  legacy_password = os.getenv("AIUG_PANEL_ADMIN_PASSWORD") or ""
+  legacy_name = (os.getenv("AIUG_PANEL_ADMIN_NAME") or "Administrator").strip() or "Administrator"
+  if legacy_email and legacy_password:
+    out.append((legacy_email, legacy_password, legacy_name))
+
+  add_from("AIUG_PANEL_ADMIN_1")
+  add_from("AIUG_PANEL_ADMIN_2")
+
+  # Deduplicate by email while preserving order.
+  seen: set[str] = set()
+  deduped: list[tuple[str, str, str]] = []
+  for email, password, name in out:
+    if email in seen:
+      continue
+    seen.add(email)
+    deduped.append((email, password, name))
+  return deduped
 
 
 def now_utc() -> datetime:
@@ -795,40 +831,17 @@ async def on_startup() -> None:
       )
       await db.commit()
 
-  # Local SQLite: always ensure dev@localhost exists (before env admin seed) so smoke-test login works
-  # even when AIUG_PANEL_ADMIN_* already created another user, or panel_users had rows but not this email.
-  if _is_sqlite_url(DATABASE_URL):
-    test_email = "dev@localhost"
-    test_pw = "temp-panel-change-me"
+  # Seed configured panel admins from env. No temporary auto-users are created.
+  seed_specs = _panel_admin_seed_specs()
+  if seed_specs:
     async with SessionLocal() as db:
-      dev_row = (
-        await db.execute(select(PanelUserRow).where(PanelUserRow.email == test_email))
-      ).scalars().first()
-      if not dev_row:
-        db.add(
-          PanelUserRow(
-            email=test_email,
-            password_hash=_hash_panel_password(test_pw),
-            full_name="Smoke test",
-            created_at=now_utc(),
-          )
-        )
-        await db.commit()
-        logging.getLogger("uvicorn.error").warning(
-          "AIUG: SQLite smoke-test panel user created (%r) — password in SETUP_GUIDE / RUNBOOK; use Supabase for production.",
-          test_email,
-        )
-
-  # Seed first panel admin from env (developers control access via deployment config).
-  seed_email = (os.getenv("AIUG_PANEL_ADMIN_EMAIL") or "").strip().lower()
-  seed_password = os.getenv("AIUG_PANEL_ADMIN_PASSWORD") or ""
-  seed_name = (os.getenv("AIUG_PANEL_ADMIN_NAME") or "Administrator").strip() or "Administrator"
-  if seed_email and seed_password:
-    async with SessionLocal() as db:
-      existing = (
-        await db.execute(select(PanelUserRow).where(PanelUserRow.email == seed_email))
-      ).scalars().first()
-      if not existing:
+      changed = False
+      for seed_email, seed_password, seed_name in seed_specs:
+        existing = (
+          await db.execute(select(PanelUserRow).where(PanelUserRow.email == seed_email))
+        ).scalars().first()
+        if existing:
+          continue
         db.add(
           PanelUserRow(
             email=seed_email,
@@ -837,6 +850,8 @@ async def on_startup() -> None:
             created_at=now_utc(),
           )
         )
+        changed = True
+      if changed:
         await db.commit()
 
 

@@ -34,8 +34,7 @@ export function LoginPage() {
         </Link>
         <h1 className="loginTitle">Admin sign in</h1>
         <p className="loginSub">
-          Sign in with an account in the <code>panel_users</code> table (your Supabase or hosted Postgres).
-          Admins are created by your team — not auto-generated.
+          Sign in with your administrator email and password.
         </p>
         <form className="loginForm" onSubmit={onSubmit}>
           <label className="loginLabel">
