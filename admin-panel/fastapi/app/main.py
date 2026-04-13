@@ -57,6 +57,14 @@ if _is_sqlite_url(DATABASE_URL):
 else:
   # Cloud Postgres (Neon, Supabase, RDS, etc.): recover dropped connections.
   _engine_kwargs["pool_pre_ping"] = True
+  # Supabase pooler / PgBouncer in transaction mode does not support
+  # asyncpg prepared statements; disable statement cache to avoid
+  # DuplicatePreparedStatementError during startup/queries.
+  if (
+    "pooler.supabase.com" in DATABASE_URL
+    or os.getenv("AIUG_PGBOUNCER_MODE", "").lower() in ("1", "true", "yes")
+  ):
+    _engine_kwargs["connect_args"] = {"statement_cache_size": 0}
 
 engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
 
