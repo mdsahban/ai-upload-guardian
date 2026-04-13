@@ -135,6 +135,25 @@ async function getPilotIdentity() {
   }
 }
 
+const ONBOARDING_STATE_KEY = 'aiug_onboarding_state';
+
+async function setOnboardingState(state) {
+  try {
+    await chrome.storage.local.set({ [ONBOARDING_STATE_KEY]: state || null });
+  } catch (_) {
+    // ignore
+  }
+}
+
+async function getOnboardingState() {
+  try {
+    const got = await chrome.storage.local.get(ONBOARDING_STATE_KEY);
+    return got?.[ONBOARDING_STATE_KEY] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.type) return;
 
@@ -300,6 +319,81 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             error: err && (err.message || String(err))
           });
         }
+      })();
+      return true;
+    }
+
+    case 'startOnboardEmployee': {
+      (async () => {
+        const payload = message.payload || {};
+        const email = String(payload?.email || '').trim().toLowerCase();
+        const inviteCode = String(payload?.inviteCode || '').trim();
+        if (!email || !inviteCode) {
+          sendResponse({ success: false, error: 'Missing invite code or email' });
+          return;
+        }
+        const requestId = `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+        await setOnboardingState({
+          status: 'in_progress',
+          requestId,
+          email,
+          inviteCode,
+          startedAt: Date.now()
+        });
+        sendResponse({ success: true, requestId });
+
+        try {
+          const out = await postJsonWithFallback('/v1/onboard', { inviteCode, email });
+          const orgId = String(out?.orgId || '').trim();
+          const employeeId = String(out?.employeeId || '').trim();
+          const token = String(out?.token || '').trim();
+          const role = String(out?.role || 'employee').trim();
+          if (!orgId || !employeeId || !token) {
+            throw new Error('Invalid onboarding response from server');
+          }
+          await chrome.storage.sync.set({
+            aiug_email: email,
+            aiug_orgId: orgId,
+            aiug_employeeId: employeeId,
+            aiug_authToken: token,
+            aiug_role: role
+          });
+          await setOnboardingState({
+            status: 'success',
+            requestId,
+            email,
+            orgId,
+            employeeId,
+            role,
+            completedAt: Date.now()
+          });
+        } catch (err) {
+          await setOnboardingState({
+            status: 'error',
+            requestId,
+            email,
+            error: err && (err.message || String(err)),
+            completedAt: Date.now()
+          });
+        } finally {
+          void refreshOnboardingBadge();
+        }
+      })();
+      return true;
+    }
+
+    case 'getOnboardingState': {
+      (async () => {
+        const st = await getOnboardingState();
+        sendResponse({ success: true, state: st });
+      })();
+      return true;
+    }
+
+    case 'clearOnboardingState': {
+      (async () => {
+        await setOnboardingState(null);
+        sendResponse({ success: true });
       })();
       return true;
     }

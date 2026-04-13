@@ -68,6 +68,7 @@
     const inviteCodeEl = document.getElementById('inviteCode');
     const connectInviteEl = document.getElementById('connectInvite');
     const pilotStatusEl = document.getElementById('pilotStatus');
+    const onboardingProgressEl = document.getElementById('onboardingProgress');
     const onboardingAlert = document.getElementById('onboardingAlert');
     const onboardingConnected = document.getElementById('onboardingConnected');
     const connectedSummary = document.getElementById('connectedSummary');
@@ -77,6 +78,78 @@
     const collapseReconnectBtn = document.getElementById('collapseReconnect');
 
     let reconnectFormOpen = false;
+    let onboardingPollTimer = null;
+
+    function normalizeConnectError(err) {
+      const msg = String(err || '').trim();
+      if (!msg) return 'Unknown error';
+      if (msg.includes('No admin API base is configured')) {
+        return 'No server is configured. Ask your admin to configure the extension API base.';
+      }
+      if (msg.includes('Failed to fetch') || msg.includes('not reachable')) {
+        return 'Cannot reach server. Check internet or ask admin to verify backend URL is configured.';
+      }
+      return msg;
+    }
+
+    async function getOnboardingState() {
+      return await new Promise((resolve) => {
+        try {
+          chrome.runtime.sendMessage({ type: 'getOnboardingState' }, (resp) => {
+            resolve(resp?.state || null);
+          });
+        } catch (_) {
+          resolve(null);
+        }
+      });
+    }
+
+    async function clearOnboardingState() {
+      return await new Promise((resolve) => {
+        try {
+          chrome.runtime.sendMessage({ type: 'clearOnboardingState' }, () => resolve());
+        } catch (_) {
+          resolve();
+        }
+      });
+    }
+
+    function startOnboardingPolling() {
+      if (onboardingPollTimer) clearInterval(onboardingPollTimer);
+      onboardingPollTimer = setInterval(async () => {
+        const st = await getOnboardingState();
+        if (!st || st.status === 'in_progress') {
+          if (pilotStatusEl) pilotStatusEl.textContent = 'Connecting...';
+          if (onboardingProgressEl) onboardingProgressEl.hidden = false;
+          if (connectInviteEl) connectInviteEl.setAttribute('disabled', 'true');
+          return;
+        }
+        if (onboardingPollTimer) {
+          clearInterval(onboardingPollTimer);
+          onboardingPollTimer = null;
+        }
+        if (connectInviteEl) connectInviteEl.removeAttribute('disabled');
+        if (onboardingProgressEl) onboardingProgressEl.hidden = true;
+        if (st.status === 'success') {
+          reconnectFormOpen = false;
+          if (inviteCodeEl) inviteCodeEl.value = '';
+          if (collapseReconnectBtn) collapseReconnectBtn.hidden = true;
+          if (pilotStatusEl) {
+            pilotStatusEl.textContent = `Connected as ${st.email || ''}`.trim();
+          }
+          await clearOnboardingState();
+          loadSettings();
+          return;
+        }
+        if (st.status === 'error') {
+          if (pilotStatusEl) {
+            pilotStatusEl.textContent = `Connect failed: ${normalizeConnectError(st.error)}`;
+          }
+          await clearOnboardingState();
+          return;
+        }
+      }, 1000);
+    }
 
     function isPilotConnected(items) {
       const orgId = String(items.aiug_orgId || '').trim();
@@ -221,51 +294,44 @@
           return;
         }
         connectInviteEl.setAttribute('disabled', 'true');
+        if (onboardingProgressEl) onboardingProgressEl.hidden = false;
         if (pilotStatusEl) pilotStatusEl.textContent = 'Connecting...';
         try {
           const resp = await new Promise((resolve) => {
             chrome.runtime.sendMessage(
               {
-                type: 'onboardEmployee',
+                type: 'startOnboardEmployee',
                 payload: { inviteCode, email }
               },
               (r) => resolve(r || null)
             );
           });
           if (!resp || !resp.success) {
-            throw new Error(resp?.error || 'Onboarding failed');
+            throw new Error(resp?.error || 'Onboarding could not start');
           }
-          if (!chrome?.storage?.sync) throw new Error('Storage unavailable');
-          const ob = resp.onboard || {};
-          await new Promise((resolve, reject) => {
-            chrome.storage.sync.set(
-              {
-                aiug_email: email,
-                aiug_orgId: String(ob.orgId || '').trim(),
-                aiug_employeeId: String(ob.employeeId || '').trim(),
-                aiug_authToken: String(ob.token || '').trim(),
-                aiug_role: String(ob.role || 'employee').trim()
-              },
-              () => {
-                if (chrome.runtime.lastError) {
-                  reject(new Error(chrome.runtime.lastError.message));
-                } else resolve();
-              }
-            );
-          });
-          reconnectFormOpen = false;
-          if (inviteCodeEl) inviteCodeEl.value = '';
-          if (collapseReconnectBtn) collapseReconnectBtn.hidden = true;
-          loadSettings();
+          startOnboardingPolling();
         } catch (e) {
-          if (pilotStatusEl) pilotStatusEl.textContent = `Connect failed: ${e.message || e}`;
-        } finally {
+          if (pilotStatusEl) {
+            pilotStatusEl.textContent = `Connect failed: ${normalizeConnectError(e?.message || e)}`;
+          }
+          if (onboardingProgressEl) onboardingProgressEl.hidden = true;
           connectInviteEl.removeAttribute('disabled');
+        } finally {
+          // kept disabled while polling in-progress state
         }
       });
     }
 
     loadSettings();
+    void (async () => {
+      const st = await getOnboardingState();
+      if (st && st.status === 'in_progress') {
+        startOnboardingPolling();
+      }
+    })();
+    window.addEventListener('beforeunload', () => {
+      if (onboardingPollTimer) clearInterval(onboardingPollTimer);
+    });
   }
 
   // ---------- Direct fix mode ----------
