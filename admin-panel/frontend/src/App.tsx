@@ -41,6 +41,11 @@ type TabKey =
   | "organizations"
   | "audit";
 
+const EXTENSION_RELEASES_URL =
+  (import.meta.env.VITE_EXTENSION_RELEASES_URL &&
+    String(import.meta.env.VITE_EXTENSION_RELEASES_URL).trim()) ||
+  "https://github.com/mdsahban/ai-upload-guardian/releases";
+
 function fmtTime(ms?: number | null) {
   if (!ms) return "-";
   try {
@@ -808,6 +813,14 @@ export function App() {
           </nav>
 
           <div className="adminTopRight">
+            <a
+              className="topReleaseLinkBtn"
+              href={EXTENSION_RELEASES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Extension Release
+            </a>
             <button
               className="sidebarToggle"
               onClick={() => setSidebarOpen((v) => !v)}
@@ -894,6 +907,30 @@ export function App() {
               <div className="dashHint">
                 Use the left tree to navigate pipeline steps, then open <b>Review</b> or{" "}
                 <b>AutoFix</b> to take actions.
+              </div>
+
+              <div className="adminManualCard">
+                <div className="adminManualTitle">Admin Manual (Quick Start)</div>
+                <ol className="adminManualList">
+                  <li>
+                    Create an org in <b>Organizations</b> and verify it appears in the list.
+                  </li>
+                  <li>
+                    Go to <b>Invites</b>, choose org/role, create an invite, then share the code with users.
+                  </li>
+                  <li>
+                    Ask users to open extension popup, enter email + invite code, and click Connect.
+                  </li>
+                  <li>
+                    Use <b>Review</b> to approve/block pending uploads and chat requests.
+                  </li>
+                  <li>
+                    Use <b>AutoFix</b> to sanitize queued content and complete requests.
+                  </li>
+                  <li>
+                    Use <b>Users</b> to suspend/revoke access and <b>Audit</b> for compliance trails.
+                  </li>
+                </ol>
               </div>
             </div>
           ) : null}
