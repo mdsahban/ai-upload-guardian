@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Upload Guardian",
   "description": "Scan ChatGPT, Gemini & Claude uploads and messages for sensitive data; mask chat in-page or fix files via the extension popup. All local.",
-  "version": "2.0.0",
+  "version": "2.0.10",
   "permissions": ["scripting", "tabs", "storage"],
   "host_permissions": [
     "https://chat.openai.com/*",

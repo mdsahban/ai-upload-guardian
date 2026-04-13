@@ -30,6 +30,8 @@
     aiug_allowLocalApiFallback: false,
     aiug_requireConfiguredApi: true
   };
+  /** Shown in popup so you can confirm the loaded build (extension popup cache). */
+  const EXTENSION_BUILD = '2.0.10';
 
   function storageKeyForFixSession(id) {
     return `aiug_fix_${id}`;
@@ -72,8 +74,11 @@
     const pilotEmailEl = document.getElementById('pilotEmail');
     const inviteCodeEl = document.getElementById('inviteCode');
     const connectInviteEl = document.getElementById('connectInvite');
+    const connectBtnLabel = connectInviteEl?.querySelector('.connect-btn-label');
+    const connectBtnSpinner = connectInviteEl?.querySelector('.connect-btn-spinner');
     const pilotStatusEl = document.getElementById('pilotStatus');
-    const onboardingProgressEl = document.getElementById('onboardingProgress');
+    const onboardingBackgroundHintEl = document.getElementById('onboardingBackgroundHint');
+    const extensionBuildHintEl = document.getElementById('extensionBuildHint');
     const onboardingAlert = document.getElementById('onboardingAlert');
     const onboardingConnected = document.getElementById('onboardingConnected');
     const connectedSummary = document.getElementById('connectedSummary');
@@ -84,17 +89,29 @@
 
     let reconnectFormOpen = false;
     let onboardingPollTimer = null;
+    /** True only for the connect flow started by pressing Connect in this popup session. */
+    let connectSpinFromUserClick = false;
 
-    function normalizeConnectError(err) {
-      const msg = String(err || '').trim();
-      if (!msg) return 'Unknown error';
-      if (msg.includes('No admin API base is configured')) {
-        return `No server is configured. Expected: ${API_DEFAULTS.aiug_apiBases[0]}.`;
+    function setConnectUiLoading(loading, fromUserClick) {
+      if (connectInviteEl) {
+        connectInviteEl.disabled = !!loading;
+        connectInviteEl.classList.toggle('btn-connecting', !!(loading && fromUserClick));
       }
-      if (msg.includes('Failed to fetch') || msg.includes('not reachable')) {
-        return `Cannot reach server at ${API_DEFAULTS.aiug_apiBases[0]}. Reload extension once, then retry. Details: ${msg}`;
+      if (connectBtnSpinner) {
+        connectBtnSpinner.hidden = !(loading && fromUserClick);
       }
-      return msg;
+      if (connectBtnLabel) {
+        connectBtnLabel.textContent =
+          loading && fromUserClick ? 'Connecting…' : 'Connect';
+      }
+      if (onboardingBackgroundHintEl) {
+        onboardingBackgroundHintEl.hidden = !(loading && !fromUserClick);
+      }
+    }
+
+    function formatConnectError(err) {
+      const msg = String(err || '').trim() || 'Unknown error';
+      return `${msg} (build ${EXTENSION_BUILD})`;
     }
 
     async function getOnboardingState() {
@@ -124,17 +141,20 @@
       onboardingPollTimer = setInterval(async () => {
         const st = await getOnboardingState();
         if (!st || st.status === 'in_progress') {
-          if (pilotStatusEl) pilotStatusEl.textContent = 'Connecting...';
-          if (onboardingProgressEl) onboardingProgressEl.hidden = false;
-          if (connectInviteEl) connectInviteEl.setAttribute('disabled', 'true');
+          if (pilotStatusEl) {
+            pilotStatusEl.textContent = connectSpinFromUserClick
+              ? 'Connecting…'
+              : 'Finishing connection in background…';
+          }
+          setConnectUiLoading(true, connectSpinFromUserClick);
           return;
         }
         if (onboardingPollTimer) {
           clearInterval(onboardingPollTimer);
           onboardingPollTimer = null;
         }
-        if (connectInviteEl) connectInviteEl.removeAttribute('disabled');
-        if (onboardingProgressEl) onboardingProgressEl.hidden = true;
+        connectSpinFromUserClick = false;
+        setConnectUiLoading(false, false);
         if (st.status === 'success') {
           reconnectFormOpen = false;
           if (inviteCodeEl) inviteCodeEl.value = '';
@@ -148,7 +168,7 @@
         }
         if (st.status === 'error') {
           if (pilotStatusEl) {
-            pilotStatusEl.textContent = `Connect failed: ${normalizeConnectError(st.error)}`;
+            pilotStatusEl.textContent = `Connect failed: ${formatConnectError(st.error)}`;
           }
           await clearOnboardingState();
           return;
@@ -301,16 +321,16 @@
     }
 
     if (connectInviteEl && inviteCodeEl && pilotEmailEl) {
-      connectInviteEl.addEventListener('click', async () => {
+        connectInviteEl.addEventListener('click', async () => {
         const inviteCode = String(inviteCodeEl.value || '').trim();
         const email = String(pilotEmailEl.value || '').trim().toLowerCase();
         if (!inviteCode || !email) {
           if (pilotStatusEl) pilotStatusEl.textContent = 'Enter work email and invite code.';
           return;
         }
-        connectInviteEl.setAttribute('disabled', 'true');
-        if (onboardingProgressEl) onboardingProgressEl.hidden = false;
-        if (pilotStatusEl) pilotStatusEl.textContent = 'Connecting...';
+        connectSpinFromUserClick = true;
+        setConnectUiLoading(true, true);
+        if (pilotStatusEl) pilotStatusEl.textContent = 'Connecting…';
         try {
           await new Promise((resolve, reject) => {
             chrome.storage.sync.set(
@@ -342,21 +362,26 @@
           }
           startOnboardingPolling();
         } catch (e) {
+          connectSpinFromUserClick = false;
+          setConnectUiLoading(false, false);
           if (pilotStatusEl) {
-            pilotStatusEl.textContent = `Connect failed: ${normalizeConnectError(e?.message || e)}`;
+            pilotStatusEl.textContent = `Connect failed: ${formatConnectError(e?.message || e)}`;
           }
-          if (onboardingProgressEl) onboardingProgressEl.hidden = true;
-          connectInviteEl.removeAttribute('disabled');
         } finally {
-          // kept disabled while polling in-progress state
+          // while polling, loading state handled by interval
         }
       });
+    }
+
+    if (extensionBuildHintEl) {
+      extensionBuildHintEl.textContent = `Extension build ${EXTENSION_BUILD} — if Connect errors look old, remove and re-add the extension.`;
     }
 
     loadSettings();
     void (async () => {
       const st = await getOnboardingState();
       if (st && st.status === 'in_progress') {
+        connectSpinFromUserClick = false;
         startOnboardingPolling();
       }
     })();

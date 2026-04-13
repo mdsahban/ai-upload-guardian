@@ -34,7 +34,7 @@ async function getAdminApiBases() {
     }
     return LOCAL_DEV_API_BASES;
   } catch (_) {
-    return LOCAL_DEV_API_BASES;
+    return DEFAULT_REMOTE_API_BASES.length ? DEFAULT_REMOTE_API_BASES : LOCAL_DEV_API_BASES;
   }
 }
 
@@ -69,6 +69,7 @@ async function postJsonWithFallback(path, payload, headers = {}) {
     try {
       const res = await fetch(`${base}${path}`, {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify(payload || {})
       });
@@ -92,7 +93,11 @@ async function getJsonWithFallback(path, headers = {}) {
   let lastError = null;
   for (const base of apiBases) {
     try {
-      const res = await fetch(`${base}${path}`, { method: 'GET', headers: { ...headers } });
+      const res = await fetch(`${base}${path}`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { ...headers }
+      });
       if (!res.ok) {
         throw new Error(await adminApiErrorMessage(res, base));
       }

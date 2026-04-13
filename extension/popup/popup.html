@@ -68,16 +68,17 @@
             />
           </div>
           <div class="actions" style="margin-top: 8px">
-            <button type="button" id="connectInvite" class="btn btn-primary">
-              Connect
+            <button type="button" id="connectInvite" class="btn btn-primary btn-connect">
+              <span class="connect-btn-label">Connect</span>
+              <span class="connect-btn-spinner" aria-hidden="true" hidden></span>
             </button>
           </div>
-          <div id="onboardingProgress" class="onboarding-progress" hidden>
-            <span class="spinner" aria-hidden="true"></span>
-            <span>Connection in progress. You can close this popup safely.</span>
-          </div>
+          <p id="onboardingBackgroundHint" class="hint onboarding-bg-hint" hidden>
+            Connection is finishing in the background. You can close this popup.
+          </p>
         </div>
         <p class="hint" id="pilotStatus" aria-live="polite"></p>
+        <p class="hint extension-build-hint" id="extensionBuildHint"></p>
       </section>
 
       <section class="details" style="margin-top: 12px">
