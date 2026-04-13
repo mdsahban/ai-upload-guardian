@@ -27,7 +27,8 @@
   };
   const API_DEFAULTS = {
     aiug_apiBases: ['https://ai-upload-guardian.onrender.com'],
-    aiug_allowLocalApiFallback: true
+    aiug_allowLocalApiFallback: false,
+    aiug_requireConfiguredApi: true
   };
 
   function storageKeyForFixSession(id) {
@@ -69,7 +70,6 @@
     const sanitizeSecretEl = document.getElementById('sanitizeSecret');
     const saveSanitizeSecretBtn = document.getElementById('saveSanitizeSecret');
     const pilotEmailEl = document.getElementById('pilotEmail');
-    const apiBaseUrlEl = document.getElementById('apiBaseUrl');
     const inviteCodeEl = document.getElementById('inviteCode');
     const connectInviteEl = document.getElementById('connectInvite');
     const pilotStatusEl = document.getElementById('pilotStatus');
@@ -163,12 +163,6 @@
       return !!(orgId && emp && tok);
     }
 
-    function normalizeApiBase(input) {
-      const raw = String(input || '').trim();
-      if (!raw) return '';
-      return raw.replace(/\/+$/, '');
-    }
-
     function applyOnboardingLayout(items) {
       const connected = isPilotConnected(items);
       const orgId = String(items.aiug_orgId || '').trim();
@@ -233,11 +227,15 @@
           if (sanitizeSecretEl)
             sanitizeSecretEl.value = items.aiug_sanitizeSecret || '';
           if (pilotEmailEl) pilotEmailEl.value = items.aiug_email || '';
-          if (apiBaseUrlEl) {
-            const firstBase = Array.isArray(items.aiug_apiBases)
-              ? String(items.aiug_apiBases[0] || '').trim()
-              : '';
-            apiBaseUrlEl.value = firstBase || API_DEFAULTS.aiug_apiBases[0];
+          const firstBase = Array.isArray(items.aiug_apiBases)
+            ? String(items.aiug_apiBases[0] || '').trim()
+            : '';
+          if (!firstBase) {
+            chrome.storage.sync.set({
+              aiug_apiBases: API_DEFAULTS.aiug_apiBases,
+              aiug_allowLocalApiFallback: API_DEFAULTS.aiug_allowLocalApiFallback,
+              aiug_requireConfiguredApi: API_DEFAULTS.aiug_requireConfiguredApi
+            });
           }
           if (inviteCodeEl && isPilotConnected(items) && !reconnectFormOpen) {
             inviteCodeEl.value = '';
@@ -306,13 +304,8 @@
       connectInviteEl.addEventListener('click', async () => {
         const inviteCode = String(inviteCodeEl.value || '').trim();
         const email = String(pilotEmailEl.value || '').trim().toLowerCase();
-        const apiBase = normalizeApiBase(apiBaseUrlEl?.value || '');
         if (!inviteCode || !email) {
           if (pilotStatusEl) pilotStatusEl.textContent = 'Enter work email and invite code.';
-          return;
-        }
-        if (!apiBase) {
-          if (pilotStatusEl) pilotStatusEl.textContent = 'Enter backend API URL first.';
           return;
         }
         connectInviteEl.setAttribute('disabled', 'true');
@@ -322,8 +315,9 @@
           await new Promise((resolve, reject) => {
             chrome.storage.sync.set(
               {
-                aiug_apiBases: [apiBase],
-                aiug_allowLocalApiFallback: false
+                aiug_apiBases: API_DEFAULTS.aiug_apiBases,
+                aiug_allowLocalApiFallback: API_DEFAULTS.aiug_allowLocalApiFallback,
+                aiug_requireConfiguredApi: API_DEFAULTS.aiug_requireConfiguredApi
               },
               () => {
                 if (chrome.runtime.lastError) {

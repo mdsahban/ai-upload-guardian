@@ -2,7 +2,7 @@
 
 // Production-first API base configuration.
 // Set aiug_apiBases (array) in chrome.storage.sync for release environments.
-const DEFAULT_REMOTE_API_BASES = [];
+const DEFAULT_REMOTE_API_BASES = ['https://ai-upload-guardian.onrender.com'];
 const LOCAL_DEV_API_BASES = [
   'http://localhost:8080/api',
   'http://127.0.0.1:8080/api',
@@ -14,15 +14,18 @@ async function getAdminApiBases() {
   try {
     const got = await chrome.storage.sync.get({
       aiug_apiBases: [],
-      aiug_allowLocalApiFallback: true,
-      aiug_requireConfiguredApi: false
+      aiug_allowLocalApiFallback: false,
+      aiug_requireConfiguredApi: true
     });
     const configured = Array.isArray(got?.aiug_apiBases)
       ? got.aiug_apiBases.map((x) => String(x || '').trim()).filter(Boolean)
       : [];
     const allowLocal = Boolean(got?.aiug_allowLocalApiFallback);
     const requireConfigured = Boolean(got?.aiug_requireConfiguredApi);
-    const bases = configured.length ? configured : DEFAULT_REMOTE_API_BASES;
+    const mergedConfigured = configured.length
+      ? [...configured, ...DEFAULT_REMOTE_API_BASES]
+      : DEFAULT_REMOTE_API_BASES;
+    const bases = Array.from(new Set(mergedConfigured));
     if (bases.length) {
       return allowLocal ? [...bases, ...LOCAL_DEV_API_BASES] : bases;
     }
@@ -77,7 +80,8 @@ async function postJsonWithFallback(path, payload, headers = {}) {
       lastError = err;
     }
   }
-  throw lastError || new Error('Admin API not reachable');
+  const baseList = apiBases.join(', ');
+  throw lastError || new Error(`Admin API not reachable. Tried: ${baseList}`);
 }
 
 async function getJsonWithFallback(path, headers = {}) {
@@ -97,7 +101,8 @@ async function getJsonWithFallback(path, headers = {}) {
       lastError = err;
     }
   }
-  throw lastError || new Error('Admin API not reachable');
+  const baseList = apiBases.join(', ');
+  throw lastError || new Error(`Admin API not reachable. Tried: ${baseList}`);
 }
 
 function isPilotFullyOnboarded(ident) {
