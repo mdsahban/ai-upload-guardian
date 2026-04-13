@@ -27,9 +27,13 @@ jobs:
         run: python admin-panel/scripts/package_extension.py
 
       - name: Upload release asset
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          repository: ${{ env.PUBLIC_RELEASE_REPO }}
+          owner: mdsahban
+          repo: ai-upload-guardian-public
           token: ${{ secrets.RELEASES_REPO_TOKEN }}
-          files: dist/ai-upload-guardian-extension-v*.zip
-          generate_release_notes: true
+          artifacts: dist/ai-upload-guardian-extension-v*.zip
+          artifactErrorsFailBuild: true
+          generateReleaseNotes: true
+          allowUpdates: true
+          replacesArtifacts: true
