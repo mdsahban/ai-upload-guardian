@@ -44,7 +44,7 @@ type TabKey =
 const EXTENSION_RELEASES_URL =
   (import.meta.env.VITE_EXTENSION_RELEASES_URL &&
     String(import.meta.env.VITE_EXTENSION_RELEASES_URL).trim()) ||
-  "https://github.com/mdsahban/ai-upload-guardian-public/releases";
+  "https://github.com/mdsahban/ai-upload-guardian-public/releases/latest";
 
 function fmtTime(ms?: number | null) {
   if (!ms) return "-";
