@@ -34,6 +34,7 @@ jobs:
           token: ${{ secrets.RELEASES_REPO_TOKEN }}
           artifacts: dist/ai-upload-guardian-extension-v*.zip
           artifactErrorsFailBuild: true
-          generateReleaseNotes: true
+          generateReleaseNotes: false
+          targetCommitish: main
           allowUpdates: true
           replacesArtifacts: true
