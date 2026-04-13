@@ -1,0 +1,81 @@
+{
+  "manifest_version": 3,
+  "name": "AI Upload Guardian",
+  "description": "Scan ChatGPT, Gemini & Claude uploads and messages for sensitive data; mask chat in-page or fix files via the extension popup. All local.",
+  "version": "2.0.0",
+  "permissions": ["scripting", "tabs", "storage"],
+  "host_permissions": [
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://claude.ai/*",
+    "http://localhost:8080/*",
+    "http://127.0.0.1:8080/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "background": {
+    "service_worker": "background/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "AI Upload Guardian",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "utils/fileUtils.js",
+        "utils/regexPatterns.js",
+        "libraries/pdfjs/pdf.min.js",
+        "libraries/extractionConfig.js",
+        "libraries/pdfParser.js",
+        "libraries/docxParser.js",
+        "libraries/tesseract.min.js",
+        "libraries/ocrProcessor.js",
+        "analyzer/textExtractor.js",
+        "analyzer/piiDetector.js",
+        "analyzer/riskScorer.js",
+        "utils/sanitizeText.js",
+        "content/inlineReview.js",
+        "content/textGuardian.js",
+        "content/fileInterceptor.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "analyzer/textExtractor.js",
+        "analyzer/piiDetector.js",
+        "analyzer/riskScorer.js",
+        "utils/regexPatterns.js",
+        "utils/fileUtils.js",
+        "utils/sanitizeText.js",
+        "libraries/extractionConfig.js",
+        "libraries/pdfjs/pdf.min.js",
+        "libraries/pdfjs/pdf.worker.min.js",
+        "libraries/pdfParser.js",
+        "libraries/docxParser.js",
+        "libraries/ocrProcessor.js",
+        "libraries/tesseract.min.js",
+        "libraries/tess/worker.min.js",
+        "libraries/tess/worker-proxy.js",
+        "libraries/tess/core/tesseract-core.wasm.js",
+        "libraries/tess/core/tesseract-core-simd.wasm.js",
+        "libraries/tess/core/tesseract-core-lstm.wasm.js",
+        "libraries/tess/core/tesseract-core-simd-lstm.wasm.js",
+        "libraries/tess/lang/eng.traineddata.gz"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Upload Guardian</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div id="settingsRoot" class="container">
+      <header>
+        <h1>AI Upload Guardian</h1>
+        <p class="subtitle">Local scanning for ChatGPT, Gemini &amp; Claude</p>
+      </header>
+
+      <section class="details">
+        <h2>Image OCR (Tesseract)</h2>
+        <p class="hint">
+          Images are scanned offline in the browser. If OCR does not run, add the worker, core, and English language files listed in <code>libraries/tess/README.md</code>, then reload the extension.
+        </p>
+      </section>
+
+      <section class="details onboarding-section" style="margin-top: 12px">
+        <h2>User onboarding</h2>
+
+        <div id="onboardingAlert" class="onboarding-alert" role="status">
+          <strong>Action needed</strong>
+          <p class="onboarding-alert-text">
+            Connect once with your work email and invite code. After that you stay
+            connected; you only need this again if you use a different invite or device.
+          </p>
+        </div>
+
+        <div id="onboardingConnected" class="onboarding-connected" hidden>
+          <div class="onboarding-connected-title">Connected</div>
+          <p class="onboarding-connected-detail" id="connectedSummary"></p>
+          <div class="onboarding-connected-actions">
+            <button type="button" id="toggleReconnect" class="btn btn-secondary btn-compact">
+              Change invite or reconnect
+            </button>
+            <button type="button" id="collapseReconnect" class="btn btn-secondary btn-compact" hidden>
+              Done
+            </button>
+          </div>
+        </div>
+
+        <div id="onboardingFormWrap">
+          <p class="hint" id="onboardingFormHint">
+            Connect this extension to your admin organization using invite code.
+          </p>
+          <div class="field-row">
+            <label class="field-label" for="pilotEmail">Work email</label>
+            <input
+              id="pilotEmail"
+              class="text-input"
+              type="email"
+              autocomplete="off"
+              placeholder="you@company.com"
+            />
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="inviteCode">Invite code</label>
+            <input
+              id="inviteCode"
+              class="text-input"
+              type="text"
+              autocomplete="off"
+              placeholder="AIUG-XXXXXXXX"
+            />
+          </div>
+          <div class="actions" style="margin-top: 8px">
+            <button type="button" id="connectInvite" class="btn btn-primary">
+              Connect
+            </button>
+          </div>
+        </div>
+        <p class="hint" id="pilotStatus" aria-live="polite"></p>
+      </section>
+
+      <section class="details" style="margin-top: 12px">
+        <h2>Text extraction (local &amp; secure)</h2>
+        <p class="hint">
+          PDFs use pdf.js for selectable text; scanned pages fall back to the same offline Tesseract engine. Nothing is sent to third‑party OCR services.
+        </p>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="highAccuracyExtraction" />
+            <span>High accuracy (slower — stronger preprocessing + OCR fallback for thin PDF pages)</span>
+          </label>
+        </div>
+        <div class="setting-row muted-row">
+          <label>
+            <input type="checkbox" id="localExtractionOnly" checked disabled />
+            <span>Local extraction only (enforced)</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="details" style="margin-top: 12px">
+        <h2>Direct fix (optional)</h2>
+        <p class="hint">
+          Optional secret used for deterministic pseudonyms in “Pseudonymize” mode. Leave default if unsure.
+        </p>
+        <div class="field-row">
+          <label class="field-label" for="sanitizeSecret">Sanitize secret</label>
+          <input
+            id="sanitizeSecret"
+            class="text-input"
+            type="password"
+            autocomplete="off"
+            placeholder="Local-only salt"
+          />
+        </div>
+        <button type="button" id="saveSanitizeSecret" class="btn btn-secondary wide">
+          Save sanitize secret
+        </button>
+      </section>
+
+      <section class="details" style="margin-top: 12px">
+        <h2>File upload protection</h2>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="enableImages" />
+            <span>Images (JPG, PNG)</span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="enablePdf" />
+            <span>PDF documents</span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="enableTextFiles" />
+            <span>Text / other documents</span>
+          </label>
+        </div>
+        <p class="hint">
+          Disabled types are not scanned or intercepted.
+        </p>
+      </section>
+    </div>
+
+    <div id="fixRoot" class="container fix-root" hidden>
+      <header>
+        <h1>Direct fix</h1>
+        <p class="subtitle" id="fixFileLabel">Sanitized file preview</p>
+      </header>
+
+      <section class="summary">
+        <div>
+          <span class="label">Risk score</span>
+          <div id="fixScore" class="value">0</div>
+        </div>
+        <div class="risk-score">
+          <span class="label">Level</span>
+          <span id="fixRiskBadge" class="badge">Low</span>
+          <div class="risk-meter">
+            <div class="risk-meter-track">
+              <div id="fixMeter" class="risk-meter-fill"></div>
+            </div>
+            <div id="fixRiskSub" class="risk-level-label">—</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="details">
+        <h2>Technique</h2>
+        <select id="fixMode" class="select-input">
+          <option value="data_masking" selected>Mask / redact (recommended)</option>
+          <option value="pseudonymization">Pseudonymize identities</option>
+          <option value="tokenization">Replace with tokens</option>
+          <option value="encryption">Placeholder [ENCRYPTED]</option>
+        </select>
+        <p class="hint" id="fixSourceHint"></p>
+      </section>
+
+      <section class="details">
+        <h2>Sanitized text</h2>
+        <textarea id="fixPreview" class="preview-area" readonly></textarea>
+        <div class="actions fix-actions">
+          <button type="button" id="fixRefresh" class="btn btn-secondary">
+            Refresh preview
+          </button>
+        </div>
+      </section>
+
+      <section class="actions fix-footer">
+        <button type="button" id="fixCancel" class="btn btn-secondary">
+          Cancel
+        </button>
+        <button type="button" id="fixApply" class="btn btn-primary">
+          Apply
+        </button>
+      </section>
+    </div>
+
+    <script src="../utils/sanitizeText.js"></script>
+    <script src="../analyzer/riskScorer.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
