@@ -89,10 +89,10 @@
       const msg = String(err || '').trim();
       if (!msg) return 'Unknown error';
       if (msg.includes('No admin API base is configured')) {
-        return 'No server is configured. Ask your admin to configure the extension API base.';
+        return `No server is configured. Expected: ${API_DEFAULTS.aiug_apiBases[0]}.`;
       }
       if (msg.includes('Failed to fetch') || msg.includes('not reachable')) {
-        return 'Cannot reach server. Check internet or ask admin to verify backend URL is configured.';
+        return `Cannot reach server at ${API_DEFAULTS.aiug_apiBases[0]}. Reload extension once, then retry. Details: ${msg}`;
       }
       return msg;
     }
